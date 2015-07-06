@@ -148,7 +148,7 @@ def _handle_sql_exception_jpype():
         exc_type = InterfaceError
     reraise(exc_type, exc_info[1], exc_info[2])
 
-def _add_apache_jars():
+def _add_extra_jars():
   jars_dir = os.path.dirname(os.path.realpath(__file__)) + '/jars'
   return [os.path.join(jars_dir,f) for f in os.listdir(jars_dir) if os.path.isfile(os.path.join(jars_dir,f)) ]
 
@@ -160,7 +160,6 @@ def _jdbc_connect_jpype(jclassname, jars, libs, pool_size, *driver_args):
         if jars:
             class_path.extend(jars)
         class_path.extend(_get_classpath())
-        print class_path
         if class_path:
             args.append('-Djava.class.path=%s' %
                         os.path.pathsep.join(class_path))
@@ -186,6 +185,8 @@ def _jdbc_connect_jpype(jclassname, jars, libs, pool_size, *driver_args):
             return jpype.JArray(jpype.JByte, 1)(data)
     # register driver for DriverManager
     jpype.JClass(jclassname)
+    
+    # use dbcp BasicDataSource to create connection from pool
     BasicDataSource = jpype.JClass('org.apache.commons.dbcp2.BasicDataSource')
     ds = BasicDataSource()
     ds.setInitialSize(pool_size)
@@ -345,7 +346,7 @@ def TimestampFromTicks(ticks):
     return apply(Timestamp, time.localtime(ticks)[:6])
 
 # DB-API 2.0 Module Interface connect constructor
-def connect(jclassname, driver_args, jars=None, libs=None, pool_size=3):
+def connect(jclassname, driver_args, pool_size=1, jars=None, libs=None):
     """Open a connection to a database using a JDBC driver and return
     a Connection instance.
 
@@ -372,8 +373,7 @@ def connect(jclassname, driver_args, jars=None, libs=None, pool_size=3):
     else:
         libs = []
         
-    jars.extend(_add_apache_jars())
-    print jars
+    jars.extend(_add_extra_jars())
     jconn = _jdbc_connect(jclassname, jars, libs, pool_size, *driver_args)
     return Connection(jconn, _converters)
 
