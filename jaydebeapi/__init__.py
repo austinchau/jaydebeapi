@@ -83,7 +83,7 @@ def _handle_sql_exception_jython():
         exc_type = InterfaceError
     reraise(exc_type, exc_info[1], exc_info[2])
 
-def _jdbc_connect_jython(jclassname, jars, libs, *args):
+def _jdbc_connect_jython(jclassname, jars, libs,pool_size,  *args):
     if _jdbc_name_to_const is None:
         from java.sql import Types
         types = Types
@@ -114,6 +114,7 @@ def _jdbc_connect_jython(jclassname, jars, libs, *args):
         _jython_set_classpath(jars)
         Class.forName(jclassname).newInstance()
     from java.sql import DriverManager
+    
     return DriverManager.getConnection(*args)
 
 def _jython_set_classpath(jars):
@@ -146,8 +147,12 @@ def _handle_sql_exception_jpype():
     else:
         exc_type = InterfaceError
     reraise(exc_type, exc_info[1], exc_info[2])
-    
-def _jdbc_connect_jpype(jclassname, jars, libs, *driver_args):
+
+def _add_apache_jars():
+  jars_dir = os.path.dirname(os.path.realpath(__file__)) + '/jars'
+  return [os.path.join(jars_dir,f) for f in os.listdir(jars_dir) if os.path.isfile(os.path.join(jars_dir,f)) ]
+
+def _jdbc_connect_jpype(jclassname, jars, libs, pool_size, *driver_args):
     import jpype
     if not jpype.isJVMStarted():
         args = []
@@ -155,6 +160,7 @@ def _jdbc_connect_jpype(jclassname, jars, libs, *driver_args):
         if jars:
             class_path.extend(jars)
         class_path.extend(_get_classpath())
+        print class_path
         if class_path:
             args.append('-Djava.class.path=%s' %
                         os.path.pathsep.join(class_path))
@@ -180,7 +186,16 @@ def _jdbc_connect_jpype(jclassname, jars, libs, *driver_args):
             return jpype.JArray(jpype.JByte, 1)(data)
     # register driver for DriverManager
     jpype.JClass(jclassname)
-    return jpype.java.sql.DriverManager.getConnection(*driver_args)
+    BasicDataSource = jpype.JClass('org.apache.commons.dbcp2.BasicDataSource')
+    ds = BasicDataSource()
+    ds.setInitialSize(pool_size)
+    ds.setDriverClassName(jclassname)
+    ds.setUrl(driver_args[0])
+    ds.setUsername(driver_args[1])
+    ds.setPassword(driver_args[2])
+    
+    # return jpype.java.sql.DriverManager.getConnection(*driver_args)
+    return ds.getConnection()
 
 def _get_classpath():
     """Extract CLASSPATH from system environment as JPype doesn't seem
@@ -330,7 +345,7 @@ def TimestampFromTicks(ticks):
     return apply(Timestamp, time.localtime(ticks)[:6])
 
 # DB-API 2.0 Module Interface connect constructor
-def connect(jclassname, driver_args, jars=None, libs=None):
+def connect(jclassname, driver_args, jars=None, libs=None, pool_size=3):
     """Open a connection to a database using a JDBC driver and return
     a Connection instance.
 
@@ -356,7 +371,10 @@ def connect(jclassname, driver_args, jars=None, libs=None):
             libs = [ libs ]
     else:
         libs = []
-    jconn = _jdbc_connect(jclassname, jars, libs, *driver_args)
+        
+    jars.extend(_add_apache_jars())
+    print jars
+    jconn = _jdbc_connect(jclassname, jars, libs, pool_size, *driver_args)
     return Connection(jconn, _converters)
 
 # DB-API 2.0 Connection Object
