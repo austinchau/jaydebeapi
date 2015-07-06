@@ -47,7 +47,7 @@ setup(
         'Topic :: Software Development :: Libraries :: Java Libraries',
         'Topic :: Software Development :: Libraries :: Python Modules',
         ],
-    package_date={'':['jars/*.jar']},
+    package_date={'':['jaydebeapi/jars/*.jar']},
     packages=['jaydebeapi'],
     install_requires=install_requires,
     )
